@@ -466,9 +466,9 @@ install(DIRECTORY Eigen DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
 
 
 option(EIGEN_BUILD_DOC "Enable creation of Eigen documentation" ON)
-if(EIGEN_BUILD_DOC)
-  add_subdirectory(doc EXCLUDE_FROM_ALL)
-endif()
+#if(EIGEN_BUILD_DOC)
+#  add_subdirectory(doc EXCLUDE_FROM_ALL)
+#endif()
 
 
 cmake_dependent_option(BUILD_TESTING "Enable creation of tests." ON "PROJECT_IS_TOP_LEVEL" OFF)
