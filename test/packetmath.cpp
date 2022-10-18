@@ -37,7 +37,7 @@ inline T REF_NMADD(const T& a, const T& b, const T& c) {
 }
 template <typename T>
 inline T REF_NMSUB(const T& a, const T& b, const T& c) {
-  return (-a * b)  - c;
+  return (-a * b) - c;
 }
 template <typename T>
 inline T REF_DIV(const T& a, const T& b) {
@@ -458,6 +458,36 @@ void packetmath() {
     VERIFY(test::areApprox(data1, data2 + offset, PacketSize) && "internal::pstoreu");
   }
 
+  for (int M = 0; M < PacketSize; ++M) {
+    for (int N = 0; N <= PacketSize; ++N) {
+      for (int j = 0; j < size; ++j) {
+        data1[j] = internal::random<Scalar>() / RealScalar(PacketSize);
+        data2[j] = internal::random<Scalar>() / RealScalar(PacketSize);
+        refvalue = (std::max)(refvalue, numext::abs(data1[j]));
+      }
+
+      if (M == 0) {
+        internal::pstore_partial(data2, internal::pload_partial<Packet>(data1, N), N);
+        VERIFY(test::areApprox(data1, data2, N) && "aligned loadN/storeN");
+
+        for (int offset = 0; offset < PacketSize; ++offset) {
+          internal::pstore_partial(data2, internal::ploadu_partial<Packet>(data1 + offset, N), N);
+          VERIFY(test::areApprox(data1 + offset, data2, N) && "internal::ploadu_partial");
+        }
+
+        for (int offset = 0; offset < PacketSize; ++offset) {
+          internal::pstoreu_partial(data2 + offset, internal::pload_partial<Packet>(data1, N), N);
+          VERIFY(test::areApprox(data1, data2 + offset, N) && "internal::pstoreu_partial");
+        }
+      }
+
+      if (N + M > PacketSize) continue;  // Don't read or write past end of Packet
+
+      internal::pstore_partial(data2, internal::pload_partial<Packet>(data1, N, M), N, M);
+      VERIFY(test::areApprox(data1, data2, N) && "aligned offset loadN/storeN");
+    }
+  }
+
   if (internal::unpacket_traits<Packet>::masked_load_available) {
     test::packet_helper<internal::unpacket_traits<Packet>::masked_load_available, Packet> h;
     unsigned long long max_umask = (0x1ull << PacketSize);
@@ -497,6 +527,7 @@ void packetmath() {
   CHECK_CWISE1_IF(PacketTraits::HasNegate, internal::negate, internal::pnegate);
   CHECK_CWISE1_IF(PacketTraits::HasReciprocal, REF_RECIPROCAL, internal::preciprocal);
   CHECK_CWISE1(numext::conj, internal::pconj);
+  CHECK_CWISE1_IF(PacketTraits::HasSign, numext::sign, internal::psign);
 
 
   for (int offset = 0; offset < 3; ++offset) {
@@ -650,9 +681,20 @@ void packetmath() {
   CHECK_CWISE1_IF(PacketTraits::HasRsqrt, numext::rsqrt, internal::prsqrt);
   CHECK_CWISE3_IF(true, REF_MADD, internal::pmadd);
   if (!std::is_same<Scalar, bool>::value && NumTraits<Scalar>::IsSigned) {
+    CHECK_CWISE3_IF(true, REF_NMSUB, internal::pnmsub);
+  }
+  
+  // For pmsub, pnmadd, the values can cancel each other to become near zero,
+  // which can lead to very flaky tests. Here we ensure the signs are such that
+  // they do not cancel.
+  for (int i = 0; i < PacketSize; ++i) {
+    data1[i] = numext::abs(internal::random<Scalar>());
+    data1[i + PacketSize] = numext::abs(internal::random<Scalar>());
+    data1[i + 2 * PacketSize] = -numext::abs(internal::random<Scalar>());
+  }
+  if (!std::is_same<Scalar, bool>::value && NumTraits<Scalar>::IsSigned) {
     CHECK_CWISE3_IF(true, REF_MSUB, internal::pmsub);
     CHECK_CWISE3_IF(true, REF_NMADD, internal::pnmadd);
-    CHECK_CWISE3_IF(true, REF_NMSUB, internal::pnmsub);
   }
 }
 
@@ -775,6 +817,7 @@ void packetmath_real() {
   CHECK_CWISE1_EXACT_IF(PacketTraits::HasCeil, numext::ceil, internal::pceil);
   CHECK_CWISE1_EXACT_IF(PacketTraits::HasFloor, numext::floor, internal::pfloor);
   CHECK_CWISE1_EXACT_IF(PacketTraits::HasRint, numext::rint, internal::print);
+  CHECK_CWISE1_IF(PacketTraits::HasSign, numext::sign, internal::psign);
 
   packetmath_boolean_mask_ops_real<Scalar,Packet>();
   
@@ -1299,6 +1342,7 @@ void packetmath_complex() {
       data1[i] = Scalar(internal::random<RealScalar>(), internal::random<RealScalar>());
     }
     CHECK_CWISE1_N(numext::sqrt, internal::psqrt, size);
+    CHECK_CWISE1_IF(PacketTraits::HasSign, numext::sign, internal::psign);
 
     // Test misc. corner cases.
     const RealScalar zero = RealScalar(0);
@@ -1371,6 +1415,36 @@ void packetmath_scatter_gather() {
   internal::pstore(data1, packet);
   for (int i = 0; i < PacketSize; ++i) {
     VERIFY(test::isApproxAbs(data1[i], buffer[i * 7], refvalue) && "pgather");
+  }
+
+  for (Index N = 0; N <= PacketSize; ++N) {
+    for (Index i = 0; i < N; ++i) {
+      data1[i] = internal::random<Scalar>() / RealScalar(PacketSize);
+    }
+
+    for (Index i = 0; i < N * 20; ++i) {
+      buffer[i] = Scalar(0);
+    }
+
+    packet = internal::pload_partial<Packet>(data1, N);
+    internal::pscatter_partial<Scalar, Packet>(buffer, packet, stride, N);
+
+    for (Index i = 0; i < N * 20; ++i) {
+      if ((i % stride) == 0 && i < stride * N) {
+        VERIFY(test::isApproxAbs(buffer[i], data1[i / stride], refvalue) && "pscatter_partial");
+      } else {
+        VERIFY(test::isApproxAbs(buffer[i], Scalar(0), refvalue) && "pscatter_partial");
+      }
+    }
+
+    for (Index i = 0; i < N * 7; ++i) {
+      buffer[i] = internal::random<Scalar>() / RealScalar(PacketSize);
+    }
+    packet = internal::pgather_partial<Scalar, Packet>(buffer, 7, N);
+    internal::pstore_partial(data1, packet, N);
+    for (Index i = 0; i < N; ++i) {
+      VERIFY(test::isApproxAbs(data1[i], buffer[i * 7], refvalue) && "pgather_partial");
+    }
   }
 }
 
