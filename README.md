@@ -8,7 +8,7 @@ In order to update this fork with its source repo, you have to follow [these](ht
  - `git merge upstream/master`
  - `git push`
 
-**Main** should be the source branch and **cmake-ludo-update** should be the working branch, were we can merge the updates through pull requests.
+**main** should be the source branch and **cmake-ludo-update** should be the working branch, where we can merge the updates through pull requests.
 
 ---
 
