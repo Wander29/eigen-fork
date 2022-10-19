@@ -138,7 +138,7 @@ option(EIGEN_BUILD_SPBENCH "Build sparse benchmark suite" OFF)
 
 # Disable pkgconfig only for native Windows builds
 if(NOT WIN32 OR NOT CMAKE_HOST_SYSTEM_NAME MATCHES Windows)
-  option(EIGEN_BUILD_PKGCONFIG "Build pkg-config .pc file for Eigen" ON)
+  option(EIGEN_BUILD_PKGCONFIG "Build pkg-config .pc file for Eigen" OFF)
 endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR OFF)
@@ -472,13 +472,13 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 #install(DIRECTORY Eigen DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
 
 
-option(EIGEN_BUILD_DOC "Enable creation of Eigen documentation" ON)
+option(EIGEN_BUILD_DOC "Enable creation of Eigen documentation" OFF)
 #if(EIGEN_BUILD_DOC)
 #  add_subdirectory(doc EXCLUDE_FROM_ALL)
 #endif()
 
 
-cmake_dependent_option(BUILD_TESTING "Enable creation of tests." ON "PROJECT_IS_TOP_LEVEL" OFF)
+cmake_dependent_option(BUILD_TESTING "Enable creation of tests." OFF "PROJECT_IS_TOP_LEVEL" OFF)
 option(EIGEN_BUILD_TESTING "Enable creation of Eigen tests." ${BUILD_TESTING})
 if(EIGEN_BUILD_TESTING)
   include(EigenConfigureTesting)
@@ -493,8 +493,8 @@ if(EIGEN_BUILD_TESTING)
 endif()
 
 include(CMakeDetermineFortranCompiler)
-option(EIGEN_BUILD_BLAS "Toggles the building of the Eigen Blas library" ${CMAKE_Fortran_COMPILER})
-option(EIGEN_BUILD_LAPACK "Toggles the building of the included Eigen LAPACK library" ${CMAKE_Fortran_COMPILER})
+option(EIGEN_BUILD_BLAS "Toggles the building of the Eigen Blas library" OFF)
+option(EIGEN_BUILD_LAPACK "Toggles the building of the included Eigen LAPACK library" OFF)
 if(EIGEN_LEAVE_TEST_IN_ALL_TARGET)
   add_subdirectory(blas)
   add_subdirectory(lapack)
